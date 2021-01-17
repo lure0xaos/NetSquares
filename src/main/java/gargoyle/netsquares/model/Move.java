@@ -1,39 +1,34 @@
 package gargoyle.netsquares.model;
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+public class Move {
+    private Direction direction;
+    private int distance;
 
-public enum Move {
-    UP(Direction.UP),
-    DOWN(Direction.DOWN),
-    LEFT(Direction.LEFT),
-    RIGHT(Direction.RIGHT),
-    OPEN(null);
-    private final @Nullable Direction direction;
-
-    Move(@Nullable Direction direction) {
-        this.direction = direction;
+    public Move(final Direction direction, final int distance) {
+        super();
+        setDirection(direction);
+        setDistance(distance);
     }
 
-    public static @Nullable Move forDirection(Direction direction) {
-        for (Move move : values()) {
-            if (move.direction == direction) {
-                return move;
-            }
-        }
-        return null;
-    }
-
-    public @Nullable Direction getDirection() {
+    public Direction getDirection() {
         return direction;
     }
 
-    public boolean isAllowed(@NotNull Directions allowed) {
-        return this == OPEN || allowed.isAllowed(direction);
+    public int getDistance() {
+        return distance;
+    }
+
+    private void setDirection(final Direction direction) {
+        this.direction = direction;
+    }
+
+    private void setDistance(final int distance) {
+        this.distance = distance;
     }
 
     @Override
     public String toString() {
-        return String.format("Move.%s(%s)", name(), direction);
+        return getClass().getSimpleName() + "[" + ("direction=" + getDirection()) + ","
+                + ("distance=" + getDistance()) + "]";
     }
 }

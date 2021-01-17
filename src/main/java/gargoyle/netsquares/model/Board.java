@@ -1,267 +1,316 @@
 package gargoyle.netsquares.model;
 
-import gargoyle.netsquares.util.Assert;
-import gargoyle.netsquares.util.Rnd;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import gargoyle.netsquares.model.i.IBoard;
+import gargoyle.netsquares.util.Randoms;
 
+import java.awt.*;
 import java.io.Serializable;
 import java.util.Arrays;
-import java.util.Objects;
-import java.util.function.BiFunction;
 
-public final class Board implements Serializable, Cloneable {
-    private static final int[][] NO_CELLS = new int[0][0];
-    private int caretX;
-    private int caretY;
+public final class Board implements Serializable, Cloneable, IBoard {
+    private static final long serialVersionUID = 8850083089471052287L;
+    private Point caret;
     private int[][] cells;
-    private int left;
+    private int score;
     private int size;
-    private int weight;
 
     public Board() {
-        cells = NO_CELLS;
-        size = 0;
-        weight = 0;
-        left = 0;
-        caretX = 0;
-        caretY = 0;
+        super();
     }
 
-    public boolean canMoveBy(@NotNull Move move) {
-        return move == Move.OPEN || canMoveBy(Objects.requireNonNull(move.getDirection()));
+    public Board(final int width, final int score) {
+        this();
+        initSize(width);
+        initScore(score);
     }
 
-    private boolean canMoveBy(@NotNull Direction direction) {
-        Assert.assertNotNull(direction, "direction is null");
-        return canMoveBy(direction.getDeltaX(), direction.getDeltaY());
+    @Override
+    public void applyMove(final Move move) {
+        getCaret().setLocation(getDestination(move));
     }
 
-    public boolean canMoveBy(@NotNull Direction direction, int step) {
-        Assert.assertNotNull(direction, "direction is null");
-        return canMoveBy(direction.getDeltaX() * step, direction.getDeltaY() * step);
+    @Override
+    public IBoard clone() {
+        final Board clone;
+        clone = new Board();
+        clone.size = size;
+        clone.score = score;
+        clone.cells = cells.clone();
+        clone.caret = caret == null ? null : new Point(caret);
+        return clone;
     }
 
-    private boolean canMoveBy(int deltaX, int deltaY) {
-        return isIn(caretX + deltaX, caretY + deltaY);
+    @Override
+    public int getBoardSize() {
+        return size;
     }
 
-    public boolean canOpen() {
-        return !isOpenAtCaret();
+    @Override
+    public Point getCaret() {
+        return caret;
     }
 
-    public boolean canOpenBy(@NotNull Move move) {
-        return (move == Move.OPEN && canOpen()) || canOpenBy(Objects.requireNonNull(move.getDirection()));
+    @Override
+    public int getCellAt(final int x, final int y) {
+        try {
+            return cells[x][y];
+        } catch (final ArrayIndexOutOfBoundsException e) {
+            return 0;
+        }
     }
 
-    private boolean canOpenBy(@NotNull Direction direction) {
-        Assert.assertNotNull(direction, "direction is null");
-        return canOpenBy(direction.getDeltaX(), direction.getDeltaY());
+    @Override
+    public int getCellAtCaret() {
+        return caret == null ? 0 : getCellAt(caret.x, caret.y);
     }
 
-    public boolean canOpenBy(@NotNull Direction direction, int step) {
-        Assert.assertNotNull(direction, "direction is null");
-        return canOpenBy(direction.getDeltaX() * step, direction.getDeltaY() * step);
+    @Override
+    public int getCellAtDestination(final Move move) {
+        return getCellAtDestination(getCaret(), move);
     }
 
-    private boolean canOpenBy(int deltaX, int deltaY) {
-        return canMoveBy(deltaX, deltaY) && !isOpenBy(deltaX, deltaY);
+    @Override
+    public int getCellAtDestination(final Point point, final Move move) {
+        final Point c = getDestination(point, move);
+        return getCellAt(c.x, c.y);
     }
 
-    public void each(@NotNull BiFunction<Integer, Integer, Integer> operation) {
+    @Override
+    public Point getDestination(final Move move) {
+        return getDestination(getCaret(), move);
+    }
+
+    @Override
+    public Point getDestination(final Point point, final Move move) {
+        final Point destination = new Point(point);
+        if (move.getDirection() == Direction.DOWN) {
+            destination.y += move.getDistance();
+        }
+        if (move.getDirection() == Direction.LEFT) {
+            destination.x -= move.getDistance();
+        }
+        if (move.getDirection() == Direction.RIGHT) {
+            destination.x += move.getDistance();
+        }
+        if (move.getDirection() == Direction.UP) {
+            destination.y -= move.getDistance();
+        }
+        return destination;
+    }
+
+    @Override
+    public Move getMoveToPoint(final int x, final int y) {
+        final int dx = x - caret.x;
+        final int dy = y - caret.y;
+        if ((dx > 0) && (dy == 0)) {
+            return new Move(Direction.RIGHT, dx);
+        }
+        if ((dx < 0) && (dy == 0)) {
+            return new Move(Direction.LEFT, -dx);
+        }
+        if ((dx == 0) && (dy > 0)) {
+            return new Move(Direction.DOWN, dy);
+        }
+        if ((dx == 0) && (dy < 0)) {
+            return new Move(Direction.UP, -dy);
+        }
+        return null;
+    }
+
+    @Override
+    public Move getNearestMove(final Direction direction) {
+        int distance = 1;
+        Move move;
+        while (isMoveIn(move = new Move(direction, distance))) {
+            if (isMoveLegal(move, null)) {
+                return move;
+            }
+            distance++;
+        }
+        return null;
+    }
+
+    @Override
+    public int getScore() {
+        return score;
+    }
+
+    @Override
+    public void initScore(final int score) {
+        this.score = score;
         for (int x = 0; x < size; x++) {
             for (int y = 0; y < size; y++) {
-                Integer res = operation.apply(x, y);
-                if (res != null) {
-                    cells[x][y] = res;
+                while (isOpenAt(x, y)) {
+                    final int a = -score;
+                    cells[x][y] = Randoms.random(a, score);
                 }
             }
         }
     }
 
-    public int getAt(int x, int y) {
-        return isIn(x, y) ? cells[x][y] : 0;
-    }
-
-    public int getAtCaret() {
-        return getAt(caretX, caretY);
+    @Override
+    public void initSize(final int size) {
+        this.size = size;
+        cells = new int[size][size];
+        caret = new Point(size / 2, size / 2);
     }
 
     @Override
-    public boolean equals(@Nullable Object o) {
+    public boolean isIn(final int x, final int y) {
+        return (x >= 0) && (x < size) && (y >= 0) && (y < size);
+    }
+
+    @Override
+    public boolean isMoveAvailable(final Direction[] allowedDirections) {
+        for (final Direction direction : allowedDirections) {
+            int distance = 1;
+            Move move;
+            while (isMoveIn(move = new Move(direction, distance))) {
+                if (isMoveLegal(move, allowedDirections)) {
+                    return true;
+                }
+                distance++;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isMoveIn(final Move move) {
+        return isMoveInFrom(getCaret(), move);
+    }
+
+    @Override
+    public boolean isMoveInFrom(final Point point, final Move move) {
+        final Point destination = getDestination(point, move);
+        return isIn(destination.x, destination.y);
+    }
+
+    @Override
+    public boolean isMoveLegal(final Move move, final Direction[] allowedDirections) {
+        final Direction direction = move.getDirection();
+        if ((allowedDirections == null) || (allowedDirections.length == 0 || (direction == null))
+                || Arrays.asList(allowedDirections).contains(direction)) {
+            final Point newCaret = getDestination(move);
+            return !isOpenAt(newCaret.x, newCaret.y);
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isOpenAt(final int x, final int y) {
+        return getCellAt(x, y) == 0;
+    }
+
+    @Override
+    public boolean isOpenAtCaret() {
+        return (caret == null) || isOpenAt(caret.x, caret.y);
+    }
+
+    @Override
+    public boolean isOpen() {
+        for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+                if (!isOpenAt(x, y)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public boolean move(final Direction direction) {
+        final Point c = new Point(getCaret());
+        do {
+            if (direction == Direction.UP) {
+                if (c.y <= 0) {
+                    return false;
+                }
+                c.y--;
+            }
+            if (direction == Direction.DOWN) {
+                if (c.y >= (size - 1)) {
+                    return false;
+                }
+                c.y++;
+            }
+            if (direction == Direction.LEFT) {
+                if (c.x <= 0) {
+                    return false;
+                }
+                c.x--;
+            }
+            if (direction == Direction.RIGHT) {
+                if (c.x >= (size - 1)) {
+                    return false;
+                }
+                c.x++;
+            }
+        } while (getCellAt(c.x, c.y) == 0);
+        caret.setLocation(c);
+        return true;
+    }
+
+    @Override
+    public void open() {
+        caret = null;
+        for (int x = 0; x < size; x++) {
+            for (int y = 0; y < size; y++) {
+                cells[x][y] = 0;
+            }
+        }
+    }
+
+    private int openCell(final int x, final int y) {
+        final int cell = getCellAt(x, y);
+        try {
+            cells[x][y] = 0;
+        } catch (final ArrayIndexOutOfBoundsException e) {
+            return cell;
+        }
+        return cell;
+    }
+
+    @Override
+    public int openCellAtCaret() {
+        return caret == null ? 0 : openCell(caret.x, caret.y);
+    }
+
+    @Override
+    public void reinit() {
+        initScore(score);
+    }
+
+    @Override
+    public boolean equals(final Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Board board = (Board) o;
-        return caretX == board.caretX &&
-                caretY == board.caretY &&
-                left == board.left &&
-                size == board.size &&
-                weight == board.weight &&
-                Arrays.equals(cells, board.cells);
-    }
+        if (!(o instanceof Board)) return false;
 
-    @Override
-    public String toString() {
-        return String.format("Board{size=%d, weight=%d, caretX=%d, caretY=%d, left=%d, cells=%s}", size, weight, caretX, caretY, left, Arrays.deepToString(cells));
-    }
+        final Board board = (Board) o;
 
-    private int getBy(int deltaX, int deltaY) {
-        return getAt(caretX + deltaX, caretY + deltaY);
-    }
+        if (score != board.score) return false;
+        if (size != board.size) return false;
+        return Arrays.deepEquals(cells, board.cells);
 
-    private int getBy(@NotNull Direction direction) {
-        Assert.assertNotNull(direction, "direction is null");
-        return getBy(direction.getDeltaX(), direction.getDeltaY());
-    }
-
-    public int getCaretX() {
-        return caretX;
-    }
-
-    public int getCaretY() {
-        return caretY;
-    }
-
-    public int getLeft() {
-        return left;
-    }
-
-    public int getSize() {
-        return size;
-    }
-
-    public int getWeight() {
-        return weight;
     }
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(caretX, caretY, left, size, weight);
-        result = 31 * result + Arrays.hashCode(cells);
+        int result = Arrays.deepHashCode(cells);
+        result = 31 * result + score;
+        result = 31 * result + size;
         return result;
     }
 
-    public int getBy(@NotNull Direction direction, int step) {
-        Assert.assertNotNull(direction, "direction is null");
-        return getBy(direction.getDeltaX() * step, direction.getDeltaY() * step);
-    }
-
     @Override
-    public Board clone() {
-        Board board;
-        try {
-            board = (Board) super.clone();
-        } catch (CloneNotSupportedException e) {
-            throw new RuntimeException(e.getMessage(), e);
-        }
-        board.caretX = caretX;
-        board.caretY = caretY;
-        board.left = left;
-        board.size = size;
-        board.weight = weight;
-        board.each((x, y) -> cells[x][y]);
-        return board;
-    }
-
-    public int getBy(@NotNull Move move) {
-        return move == Move.OPEN ? getAtCaret() : getBy(Objects.requireNonNull(move.getDirection()));
-    }
-
-    public void init(int size, int weight) {
-        cells = new int[size][size];
-        for (int x = 0; x < size; x++) {
-            cells[x] = new int[size];
-            for (int y = 0; y < size; y++) {
-                while (cells[x][y] == 0) {
-                    cells[x][y] = Rnd.rnd(-weight, weight);
-                }
-            }
-        }
-        this.size = size;
-        this.weight = weight;
-        left = size * size;
-        caretX = size / 2;
-        caretY = size / 2;
-    }
-
-    public boolean isCaretAt(int x, int y) {
-        return x == caretX && y == caretY;
-    }
-
-    private boolean isIn(int x, int y) {
-        return x >= 0 && y >= 0 && x < size && y < size;
-    }
-
-    public boolean isOpenAt(int x, int y) {
-        return cells[x][y] == 0;
-    }
-
-    private boolean isOpenAtCaret() {
-        return cells[caretX][caretY] == 0;
-    }
-
-    public boolean isOpenBy(@NotNull Direction direction, int step) {
-        Assert.assertNotNull(direction, "direction is null");
-        return isOpenBy(direction.getDeltaX() * step, direction.getDeltaY() * step);
-    }
-
-    public boolean isOpenBy(@NotNull Move move) {
-        return move == Move.OPEN ? isOpenAtCaret() : isOpenBy(Objects.requireNonNull(move.getDirection()));
-    }
-
-    private boolean isOpenBy(@NotNull Direction direction) {
-        Assert.assertNotNull(direction, "direction is null");
-        return isOpenBy(direction.getDeltaX(), direction.getDeltaY());
-    }
-
-    private boolean isOpenBy(int deltaX, int deltaY) {
-        int x = caretX + deltaX;
-        int y = caretY + deltaY;
-        return isIn(x, y) && isOpenAt(x, y);
-    }
-
-    public void moveBy(@NotNull Move move) {
-        if (move == Move.OPEN) {
-            openAtCaret();
-        } else {
-            moveBy(Objects.requireNonNull(move.getDirection()));
-        }
-    }
-
-    private void moveBy(@NotNull Direction direction) {
-        Assert.assertNotNull(direction, "direction is null");
-        moveBy(direction.getDeltaX(), direction.getDeltaY());
-    }
-
-    public boolean moveBy(@NotNull Direction direction, int step) {
-        Assert.assertNotNull(direction, "direction is null");
-        return moveBy(direction.getDeltaX() * step, direction.getDeltaY() * step);
-    }
-
-    private boolean moveBy(int deltaX, int deltaY) {
-        boolean move = canMoveBy(deltaX, deltaY);
-        if (move) {
-            caretX += deltaX;
-            caretY += deltaY;
-        }
-        return move;
-    }
-
-    public int openAtCaret() {
-        int r = cells[caretX][caretY];
-        cells[caretX][caretY] = 0;
-        if (r != 0) {
-            left--;
-        }
-        return r;
-    }
-
-    public void openBoard() {
-        each((x, y) -> 0);
-        left = 0;
-    }
-
-    public void reInit() {
-        init(size, weight);
+    public String toString() {
+        final StringBuilder sb = new StringBuilder("Board{");
+        sb.append("size=").append(size);
+        sb.append(", score=").append(score);
+        sb.append(", caret=").append(caret);
+        sb.append(", cells=").append(Arrays.toString(cells));
+        sb.append('}');
+        return sb.toString();
     }
 }
